@@ -1,0 +1,17 @@
+[package]
+name = "grow-safety"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Hard limits in code: what the agent may never do to a plant, a heater or a pump"
+
+[dependencies]
+grow-hal.workspace = true
+grow-recipe.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

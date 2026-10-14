@@ -1,0 +1,71 @@
+# Butterhead lettuce in deep-water culture. Thirty-five days from seed to a 150 g head.
+#
+# This is the first crop the agent really drives: EC, pH, water temperature and light hours all
+# move during the run. Numbers are the common hydroponic lettuce bands; the point of the
+# repository is to replace them with measured ones.
+
+id = "lettuce-butterhead"
+crop = "lettuce"
+variety = "butterhead (e.g. Rex, Salanova)"
+days = 35
+sources = [
+  "Cornell CEA, Hydroponic Lettuce Handbook (Brechner & Both)",
+  "RDA 농업기술길잡이 상추 재배",
+]
+
+[[stages]]
+name = "germination"
+from_day = 0
+notes = "Seed in rockwool or sponge, plain water. Dim light is enough. Keep the medium wet, not flooded."
+light = { hours = 12.0, on_hour = 7.0 }
+
+[stages.targets]
+air_temp_c = { min = 18.0, max = 22.0 }
+humidity_pct = { min = 70.0, max = 90.0 }
+ppfd_umol = { min = 50.0, max = 100.0 }
+
+[[stages]]
+name = "seedling"
+from_day = 3
+notes = "First true leaves. Half-strength nutrient. Long day, moderate light."
+light = { hours = 16.0, on_hour = 6.0 }
+
+[stages.targets]
+air_temp_c = { min = 18.0, max = 23.0 }
+water_temp_c = { min = 18.0, max = 22.0 }
+humidity_pct = { min = 60.0, max = 80.0 }
+ec_ms = { min = 0.8, max = 1.2 }
+ph = { min = 5.8, max = 6.2 }
+ppfd_umol = { min = 120.0, max = 180.0 }
+water_level_pct = { min = 60.0, max = 100.0 }
+
+[[stages]]
+name = "vegetative"
+from_day = 14
+notes = "Full strength. CO2 helps if the room has it (an office in daytime usually does). Water above 24 C invites root rot."
+light = { hours = 16.0, on_hour = 6.0 }
+
+[stages.targets]
+air_temp_c = { min = 18.0, max = 24.0 }
+water_temp_c = { min = 18.0, max = 22.0 }
+humidity_pct = { min = 55.0, max = 75.0 }
+co2_ppm = { min = 600.0, max = 1200.0 }
+ec_ms = { min = 1.2, max = 1.6 }
+ph = { min = 5.8, max = 6.2 }
+ppfd_umol = { min = 180.0, max = 250.0 }
+water_level_pct = { min = 60.0, max = 100.0 }
+
+[[stages]]
+name = "finishing"
+from_day = 30
+notes = "Back off EC and light to avoid tip burn before harvest."
+light = { hours = 14.0, on_hour = 6.0 }
+
+[stages.targets]
+air_temp_c = { min = 17.0, max = 22.0 }
+water_temp_c = { min = 18.0, max = 22.0 }
+humidity_pct = { min = 55.0, max = 75.0 }
+ec_ms = { min = 1.0, max = 1.4 }
+ph = { min = 5.8, max = 6.2 }
+ppfd_umol = { min = 150.0, max = 200.0 }
+water_level_pct = { min = 60.0, max = 100.0 }

@@ -1,0 +1,22 @@
+[package]
+name = "grow-run"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "A grow is a folder: every cycle as a JSONL line, energy, photos, harvest. The data the repository exists for"
+
+[dependencies]
+grow-agent.workspace = true
+grow-hal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+grow-recipe.workspace = true
+grow-safety.workspace = true

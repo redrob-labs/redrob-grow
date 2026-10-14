@@ -1,0 +1,27 @@
+[package]
+name = "grow-node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "The program that runs on the shelf: one agent loop, one rig, one recipe, a small local API"
+
+[[bin]]
+name = "grow-node"
+path = "src/main.rs"
+
+[dependencies]
+grow-agent.workspace = true
+grow-hal.workspace = true
+grow-recipe.workspace = true
+grow-run.workspace = true
+grow-safety.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+tiny_http.workspace = true
+
+[lints]
+workspace = true

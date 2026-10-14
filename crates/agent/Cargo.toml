@@ -1,0 +1,18 @@
+[package]
+name = "grow-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "The decision loop: observe the shelf, read the recipe, learn the room, propose, pass the guard, act, verify"
+
+[dependencies]
+grow-hal.workspace = true
+grow-recipe.workspace = true
+grow-safety.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

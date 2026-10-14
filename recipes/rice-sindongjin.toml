@@ -1,0 +1,86 @@
+# Paddy rice in a 15 cm flooded tub under LEDs. About 110 days.
+#
+# Rice indoors is the crop nobody publishes numbers for, so this recipe is the least certain file
+# in the repository. Bands come from field agronomy for a Korean japonica cultivar and from the
+# plant-factory shortening studies; every run should tighten them. The agent is told so in
+# `notes`.
+
+id = "rice-sindongjin"
+crop = "rice"
+variety = "Sindongjin (신동진), japonica"
+days = 110
+sources = [
+  "RDA 농업기술길잡이 벼 재배 (온도·수온 기준)",
+  "Frontiers in Plant Science 2026, rice growth in field vs plant factory (95 vs 138 days)",
+  "Plants (MDPI) 2026, protocol to shorten rice growth cycle in plant factories",
+]
+
+[[stages]]
+name = "germination"
+from_day = 0
+notes = "Pre-soaked seed on wet medium. Warm water matters more than air. Little light."
+light = { hours = 12.0, on_hour = 7.0 }
+
+[stages.targets]
+air_temp_c = { min = 25.0, max = 32.0 }
+water_temp_c = { min = 28.0, max = 32.0 }
+humidity_pct = { min = 70.0, max = 95.0 }
+ppfd_umol = { min = 50.0, max = 150.0 }
+
+[[stages]]
+name = "seedling"
+from_day = 7
+notes = "Transplant to the tub at 3 leaves, 2-3 cm of water. Long day pushes vegetative growth."
+light = { hours = 14.0, on_hour = 6.0 }
+
+[stages.targets]
+air_temp_c = { min = 24.0, max = 30.0 }
+water_temp_c = { min = 24.0, max = 30.0 }
+humidity_pct = { min = 60.0, max = 85.0 }
+ph = { min = 5.5, max = 6.5 }
+ppfd_umol = { min = 250.0, max = 400.0 }
+water_level_pct = { min = 30.0, max = 60.0 }
+
+[[stages]]
+name = "tillering"
+from_day = 25
+notes = "Raise the water to 5-8 cm. Warm and bright; this is where yield is set."
+light = { hours = 13.0, on_hour = 6.0 }
+
+[stages.targets]
+air_temp_c = { min = 26.0, max = 32.0 }
+water_temp_c = { min = 24.0, max = 30.0 }
+humidity_pct = { min = 60.0, max = 85.0 }
+co2_ppm = { min = 500.0, max = 1200.0 }
+ph = { min = 5.5, max = 6.5 }
+ppfd_umol = { min = 400.0, max = 600.0 }
+water_level_pct = { min = 50.0, max = 90.0 }
+
+[[stages]]
+name = "heading-and-flowering"
+from_day = 60
+notes = "Shorter day triggers heading in japonica. Keep water full. Above 35 C at flowering sterilises pollen: this is the one hard ceiling."
+light = { hours = 12.0, on_hour = 6.0 }
+
+[stages.targets]
+air_temp_c = { min = 26.0, max = 32.0 }
+water_temp_c = { min = 24.0, max = 30.0 }
+humidity_pct = { min = 65.0, max = 85.0 }
+co2_ppm = { min = 500.0, max = 1200.0 }
+ph = { min = 5.5, max = 6.5 }
+ppfd_umol = { min = 400.0, max = 600.0 }
+water_level_pct = { min = 70.0, max = 100.0 }
+
+[[stages]]
+name = "ripening"
+from_day = 85
+notes = "Cooler and drier. Let the water fall in the last two weeks so the grain hardens."
+light = { hours = 12.0, on_hour = 6.0 }
+
+[stages.targets]
+air_temp_c = { min = 20.0, max = 28.0 }
+water_temp_c = { min = 20.0, max = 28.0 }
+humidity_pct = { min = 50.0, max = 75.0 }
+ph = { min = 5.5, max = 6.5 }
+ppfd_umol = { min = 300.0, max = 500.0 }
+water_level_pct = { min = 10.0, max = 60.0 }

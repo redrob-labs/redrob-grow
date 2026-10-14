@@ -1,0 +1,34 @@
+# Radish sprouts in a tray. Seven days from seed to plate.
+#
+# This is the equipment-check crop: nothing here is hard to hold, so a failure means the rig is
+# wrong, not the recipe. Sprouts want dark and damp first, then a little light to green up.
+
+id = "radish-sprout"
+crop = "radish"
+variety = "sprouting radish (daikon type)"
+days = 7
+sources = [
+  "ISS International Sprout Growers Association, home sprouting guidance",
+  "Rural Development Administration (RDA) 새싹채소 재배 요령",
+]
+
+[[stages]]
+name = "soak-and-germinate"
+from_day = 0
+notes = "Covered tray, no light. Rinse twice a day. Air warm, air damp."
+light = { hours = 0.0, on_hour = 8.0 }
+
+[stages.targets]
+air_temp_c = { min = 20.0, max = 25.0 }
+humidity_pct = { min = 70.0, max = 95.0 }
+
+[[stages]]
+name = "greening"
+from_day = 2
+notes = "Uncover. Low light greens the cotyledons. Keep rinsing; sprouts rot if they sit in water."
+light = { hours = 12.0, on_hour = 8.0 }
+
+[stages.targets]
+air_temp_c = { min = 18.0, max = 24.0 }
+humidity_pct = { min = 60.0, max = 85.0 }
+ppfd_umol = { min = 50.0, max = 120.0 }

@@ -1,0 +1,27 @@
+[package]
+name = "grow-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Redrob Grow desktop dashboard: see the shelf, set a node up in one pass, watch the agent think"
+
+[[bin]]
+name = "redrob-grow"
+path = "src/main.rs"
+
+[dependencies]
+grow-agent.workspace = true
+grow-hal.workspace = true
+grow-recipe.workspace = true
+grow-safety.workspace = true
+eframe.workspace = true
+egui.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+ureq.workspace = true
+
+[lints]
+workspace = true
