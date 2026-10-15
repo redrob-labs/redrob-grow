@@ -198,7 +198,7 @@ impl Rig for OfficeRig {
 
     fn read(&mut self) -> Result<Snapshot, HalError> {
         let on = self.wired.iter().map(|s| (*s, self.is_on(*s))).collect();
-        Ok(Snapshot { readings: self.state.clone(), on })
+        Ok(Snapshot { readings: self.state.clone(), on, energy_kwh: Some(self.kwh()) })
     }
 
     fn set(&mut self, cmd: Command) -> Result<(), HalError> {

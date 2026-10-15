@@ -20,12 +20,12 @@ CO2는 사람이 많을 때 올라가고 밤에 떨어지고, 믿을 수 있는 
 | 크레이트 | 하는 일 |
 |---|---|
 | `grow-recipe` | 작물 레시피를 TOML로: 단계, 목표 범위, 조명 시간. 검증·내장. |
-| `grow-hal` | 센서와 스위치를 트레이트 하나 뒤에. 개발·테스트용 사무실 시뮬레이션 리그, 실제 선반용 [Mycodo](https://github.com/kizniche/Mycodo) REST API 리그. |
+| `grow-hal` | 센서와 스위치를 트레이트 하나 뒤에. 개발·테스트용 사무실 시뮬레이션 리그, [Tasmota](https://tasmota.github.io/) 스마트플러그·센서 노드 HTTP 리그(파이 없음, 납땜 없음, 플러그가 kWh를 직접 잼), 라즈베리파이 [Mycodo](https://github.com/kizniche/Mycodo) REST API 리그. |
 | `grow-safety` | 코드로 박은 한계. 모든 명령을 최대 켜짐 시간으로 자르고, 쿨다운을 강제하고, 이미 뜨거운 물은 더 못 데우게 거부하고, 위반한 스위치는 강제로 끕니다. 제안을 받지 않습니다. |
-| `grow-agent` | 루프: 읽기, 단계 확인, 방 학습(시간대 48칸, 평일·주말 따로), 제안, 가드 통과, 실행, 보고. 지금은 결정적 규칙 플래너. 모델 플래너는 같은 관측과 같은 도구 넷을 씁니다. |
+| `grow-agent` | 루프: 읽기, 단계 확인, 방 학습(시간대 48칸, 평일·주말 따로), 제안, 가드 통과, 실행, 보고. 플래너 둘이 한 트레이트 뒤에: 결정적 규칙, 그리고 같은 관측·규칙의 제안·운영자 메시지·최신 사진을 도구 넷(`switch_on`, `switch_off`, `note`, `ask_human`)과 함께 모델에 주고 답이 없으면 규칙으로 돌아오는 `EnginePlanner`. |
 | `grow-run` | 재배 1회 = 폴더 1개: `run.json`, `cycles.jsonl`(사이클마다 한 줄), `photos/`, `harvest.json`, 그램당 kWh 요약. |
-| `grow-node` | 선반 위에서 도는 바이너리. `grow-node init`, `grow-node run node.toml`, 루프백 `GET /state`. |
-| `grow-app` | 데스크톱 대시보드(egui): 범위 대비 측정값, 에이전트가 무엇을 왜 했는지, 가드 경보, 48시간 차트, `node.toml`을 써 주는 4단계 설정 마법사. |
+| `grow-node` | 선반 위에서 도는 바이너리. `grow-node init`, `grow-node run node.toml`, 루프백 `GET /state`·`POST /answer`, 대시보드가 찾을 수 있게 LAN에 UDP 인사. 모델은 기본으로 같은 기계의 Redrob Code 데몬, 아니면 아무 OpenAI 호환 `/v1`. |
+| `grow-app` | 데스크톱 대시보드(egui): 범위 대비 측정값, 에이전트가 무엇을 왜 했는지, 가드 경보, 48시간 차트, 노드 여러 개 나란히, 에이전트의 노트·질문과 답장 칸, `node.toml`을 써 주는 5단계 설정 마법사. |
 
 JavaScript 없음, 웹뷰 없음, 클라우드 없음. 노드는 선반의 컴퓨터에서 돌고 대시보드는 같은 LAN에서 그것과 이야기합니다.
 
@@ -45,21 +45,43 @@ cargo run -p grow-node -- run           # http://127.0.0.1:7474/state 제공
 
 대시보드의 **grow-node over HTTP** 소스를 그 주소로 두면 됩니다.
 
+## 누가 결정하나
+
+노드는 사이클마다(기본 10분) 선반을 읽고 레시피 단계를 확인한 뒤 플래너에게 묻습니다. **규칙 플래너**는
+데드밴드 제어에 사무실 습관 둘(에어컨 켜지기 전에 미리 가열, 사람이 CO2를 내쉬는 시간으로 조명 이동)을
+더한 것입니다. **엔진 플래너**는 규칙이 본 모든 것과 규칙이 할 일을 모델에 보내고, 모델은 도구 호출로
+답합니다. 무엇이 돌아오든 `grow-safety`를 거칩니다. 자르고, 거부하고, 강제로 끄고, 아무에게도 묻지
+않습니다. 모델은 운영자에게 질문할 수 있고(`ask_human`), 대시보드에 뜬 질문에 답하면 다음 사이클
+프롬프트에 들어갑니다.
+
+```toml
+[planner]
+kind = "engine"        # 또는 "rules"
+endpoint = ""          # 비우면 이 기계의 Redrob Code 데몬, 아니면 아무 OpenAI 호환 /v1
+model = "redrob/auto"
+photo_dir = "photos"   # scripts/snap.sh가 채움. 최신 사진이 함께 감
+```
+
 ## 진짜 선반에 올리기
 
 레시피가 가정하는 선반은 약 60~90만 원, 철제 선반 하나 크기입니다: [docs/HARDWARE.md](docs/HARDWARE.md).
-라즈베리파이에 Mycodo를 깔고 API 키를 만든 뒤 대시보드 **Setup** 탭에서 선반 이름, 작물, Mycodo 주소와
-키, 입력·출력의 unique id를 넣고 `node.toml`을 저장하고, 파이에서 `grow-node run node.toml`을 실행합니다.
-루프가 돌기 시작하고 `runs/` 폴더가 채워지고 대시보드에 선반이 보입니다.
+가장 싼 배선은 스위치마다 Tasmota 스마트플러그 하나(조명·히터·팬·펌프), 측정값이 필요하면 센서를 I2C로
+붙인 Tasmota ESP32 하나입니다. 라즈베리파이 Mycodo도 됩니다. 대시보드 **Setup** 탭에서 선반 이름, 작물,
+장비, 스위치마다 플러그 주소(또는 Mycodo 입력·출력 unique id), 두뇌를 고르고 `node.toml`을 저장한 뒤
+선반 컴퓨터에서 `grow-node run node.toml`을 실행합니다. 루프가 돌기 시작하고 `runs/` 폴더가 채워지고,
+대시보드 **Find on LAN**에 노드가 뜨고, 노드 둘은 나란히 보여 A/B 재배가 됩니다.
 
 노드의 HTTP API는 인증이 없고 기본으로 루프백에만 묶입니다. 다른 기계에서는 SSH 터널로 접근하고,
 열린 네트워크에 두지 마세요.
 
 ## 상태
 
-0단계(부트스트랩) 완료: 레시피, 사무실 시뮬레이션 리그, Mycodo 리그, 안전 가드, 방 학습이 든 규칙
-플래너, 재배 로그, 노드 바이너리, 설정 마법사가 든 대시보드. 테스트 41개, Linux·Windows CI.
-아직 진짜 식물을 기른 적은 없습니다. 첫 상추 재배가 1단계입니다. 단계와 통과 조건: [docs/ROADMAP.ko.md](docs/ROADMAP.ko.md).
+식물 없이 할 수 있는 것은 다 했습니다: 단계별 하드 상한이 든 레시피, 사무실 시뮬레이션 리그, Tasmota·Mycodo
+리그, 안전 가드, 방 학습이 든 규칙 플래너, 운영자 대화가 되는 엔진 플래너, kWh 실측이 든 재배 로그, LAN
+발견이 되는 노드 바이너리, 다중 노드 보기와 설정 마법사가 든 대시보드, 릴리즈 워크플로. 테스트 59개,
+Linux·Windows CI. 아직 진짜 식물을 기른 적은 없습니다. [docs/RESULTS.md](docs/RESULTS.md)의 첫 줄이
+1단계입니다. 단계와 통과 조건: [docs/ROADMAP.ko.md](docs/ROADMAP.ko.md). 작물 추가:
+[docs/CONTRIBUTING-RECIPES.md](docs/CONTRIBUTING-RECIPES.md).
 
 ## 라이선스
 

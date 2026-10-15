@@ -15,8 +15,9 @@ thiserror.workspace = true
 ureq = { workspace = true, optional = true }
 
 [features]
-default = ["mycodo"]
+default = ["mycodo", "tasmota"]
 mycodo = ["dep:ureq"]
+tasmota = ["dep:ureq"]
 
 [dev-dependencies]
 tiny_http.workspace = true

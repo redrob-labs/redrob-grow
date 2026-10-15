@@ -1,25 +1,29 @@
 //! `grow-node`: the program that runs on the shelf.
 //!
 //! ```text
-//! grow-node init [node.toml]     write an example config (simulated office, lettuce)
-//! grow-node run  [node.toml]     run the loop and serve GET /state on node.listen
+//! grow-node init [node.toml]     write an example config (simulated office, lettuce, engine planner)
+//! grow-node run  [node.toml]     run the loop and serve the local API on node.listen
 //! grow-node recipes              list built-in recipes
 //! ```
 //!
 //! The HTTP API is loopback-only unless `listen` says otherwise, and has no authentication: it is
 //! meant for the dashboard on the same machine or over an SSH tunnel. Do not expose it.
+//! `POST /answer` only feeds text to the planner, which still cannot bypass the guard.
 
+mod announce;
 mod config;
+mod planner;
 mod state;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use grow_agent::{Clock, Cycle, RulePlanner};
+use grow_agent::{Clock, Cycle, Planner};
 use grow_hal::Rig;
 use grow_hal::mock::{Office, OfficeRig};
 use grow_hal::mycodo::MycodoRig;
+use grow_hal::tasmota::TasmotaRig;
 use grow_recipe::{Recipe, builtin};
 use grow_run::{Run, RunMeta};
 use grow_safety::{Guard, Limits};
@@ -99,13 +103,32 @@ fn cmd_run(path: PathBuf) -> i32 {
             (Box::new(OfficeRig::new(office)), *speed)
         }
         RigConfig::Mycodo(m) => (Box::new(MycodoRig::new(m.clone())), 1),
+        RigConfig::Tasmota(t) => (Box::new(TasmotaRig::new(t.clone())), 1),
+    };
+    let planner: Box<dyn Planner> = match planner::build(&cfg.planner) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("planner: {e}");
+            return 1;
+        }
     };
 
-    let shared: Shared = Arc::new(Mutex::new(state::State::new(&cfg.node.name, &recipe.id, rig.name())));
+    let shared: Shared = Arc::new(Mutex::new(state::State::new(&cfg.node.name, &recipe.id, rig.name(), planner.name())));
     let listen = cfg.node.listen.clone();
     let server_state = shared.clone();
     std::thread::spawn(move || serve(&listen, server_state));
-    println!("grow-node `{}` recipe {} rig {} listening on http://{}", cfg.node.name, recipe.id, rig.name(), cfg.node.listen);
+    if cfg.node.announce {
+        let (name, listen) = (cfg.node.name.clone(), cfg.node.listen.clone());
+        std::thread::spawn(move || announce::run(&name, &listen));
+    }
+    println!(
+        "grow-node `{}` recipe {} rig {} planner {} listening on http://{}",
+        cfg.node.name,
+        recipe.id,
+        rig.name(),
+        planner.name(),
+        cfg.node.listen
+    );
 
     let run = match open_or_create_run(&cfg, &recipe, rig.name()) {
         Ok(r) => r,
@@ -115,19 +138,28 @@ fn cmd_run(path: PathBuf) -> i32 {
         }
     };
 
-    let mut cycle = Cycle::new(rig, RulePlanner::default(), Guard::new(Limits::office_shelf()), recipe);
+    let mut cycle = Cycle::new(rig, planner, Guard::new(Limits::office_shelf()), recipe);
     let period = cfg.node.period_secs;
     loop {
         let clock = match cycle.rig.sim_time() {
             Some(sim) => Clock { now_secs: sim, hour: (sim % 86_400) as f64 / 3600.0, weekday: (sim / 86_400) % 7 < 5, day: (sim / 86_400) as u32 },
             None => wall_clock(cfg.node.tz_offset_hours, sown_day),
         };
+        // Operator messages first, so this cycle's prompt carries them.
+        let inbox: Vec<String> = shared.lock().map(|mut s| std::mem::take(&mut s.inbox)).unwrap_or_default();
+        for m in &inbox {
+            cycle.planner.hear(m);
+            if let Err(e) = run.append_operator(clock.day, m) {
+                eprintln!("operator log: {e}");
+            }
+        }
         match cycle.run(clock) {
             Ok(report) => {
                 if let Err(e) = run.append(&report) {
                     eprintln!("run log: {e}");
                 }
                 if let Ok(mut s) = shared.lock() {
+                    s.planner_status = cycle.planner.status();
                     s.push(report, period);
                 }
             }

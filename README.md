@@ -22,12 +22,12 @@ One Rust workspace, built from scratch:
 | Crate | Does |
 |---|---|
 | `grow-recipe` | A crop recipe as TOML: stages, target bands, light schedule. Validated, embedded. |
-| `grow-hal` | Sensors and switches behind one trait. A simulated office rig for development and tests; a Raspberry Pi running [Mycodo](https://github.com/kizniche/Mycodo) over its REST API for the real shelf. |
+| `grow-hal` | Sensors and switches behind one trait. A simulated office rig for development and tests; [Tasmota](https://tasmota.github.io/) smart plugs and sensor nodes over HTTP (no Pi, no soldering, plugs meter their own kWh); a Raspberry Pi running [Mycodo](https://github.com/kizniche/Mycodo) over its REST API. |
 | `grow-safety` | Hard limits in code. Clips every command to a maximum on-time, enforces cooldowns, refuses to heat water that is already too hot, forces offending switches off. Takes no suggestions. |
-| `grow-agent` | The loop: observe, read the stage, learn the room (48 hour-of-day bins, weekday and weekend apart), propose, pass the guard, act, report. A deterministic rule planner today; the model-backed planner uses the same observation and the same four tools. |
+| `grow-agent` | The loop: observe, read the stage, learn the room (48 hour-of-day bins, weekday and weekend apart), propose, pass the guard, act, report. Two planners behind one trait: deterministic rules, and `EnginePlanner`, which hands the same observation, the rules' own proposal, the operator's messages and the latest photo to a model through four tools (`switch_on`, `switch_off`, `note`, `ask_human`) and falls back to the rules when the model does not answer. |
 | `grow-run` | A grow is a folder: `run.json`, `cycles.jsonl` (one report per cycle), `photos/`, `harvest.json`, and a summary with kWh per gram. |
-| `grow-node` | The binary on the shelf. `grow-node init`, `grow-node run node.toml`, `GET /state` on loopback. |
-| `grow-app` | The desktop dashboard (egui): readings against bands, what the agent decided and why, the guard's alarms, a 48 h chart, and a four-step setup wizard that writes `node.toml`. |
+| `grow-node` | The binary on the shelf. `grow-node init`, `grow-node run node.toml`, `GET /state` and `POST /answer` on loopback, a UDP hello on the LAN so the dashboard finds it. The model is the shared Redrob Code daemon on the same machine by default, or any OpenAI-compatible `/v1`. |
+| `grow-app` | The desktop dashboard (egui): readings against bands, what the agent decided and why, the guard's alarms, a 48 h chart, several nodes side by side, the agent's notes and questions with a reply box, and a five-step setup wizard that writes `node.toml`. |
 
 No JavaScript, no web view, no cloud. The node runs on the shelf's own computer and the
 dashboard talks to it on your LAN.
@@ -49,24 +49,47 @@ cargo run -p grow-node -- run           # serves http://127.0.0.1:7474/state
 
 Point the dashboard's **grow-node over HTTP** source at that address.
 
+## Who decides
+
+Every cycle (ten minutes by default) the node reads the shelf, works out the recipe stage, and
+asks a planner. The **rule planner** is deadband control plus two office habits (pre-heat before
+the air conditioner comes on, move the light into the hours when people breathe CO2 into the
+room). The **engine planner** sends the model everything the rules saw plus what the rules would
+do, and the model answers with tool calls. Whatever comes back goes through `grow-safety`, which
+clips, refuses and forces off without asking anyone. The model can ask the operator a question
+(`ask_human`); the dashboard shows it and your reply reaches the next cycle's prompt.
+
+```toml
+[planner]
+kind = "engine"        # or "rules"
+endpoint = ""          # empty: the Redrob Code daemon on this machine; else any OpenAI-compatible /v1
+model = "redrob/auto"
+photo_dir = "photos"   # scripts/snap.sh fills it; the newest photo rides along
+```
+
 ## Put it on a real shelf
 
 The shelf that the recipes assume costs about 600,000 to 900,000 KRW and fits one rack:
-[docs/HARDWARE.md](docs/HARDWARE.md). Set up the Raspberry Pi with Mycodo, create an API key,
-then open the dashboard's **Setup** tab: name the shelf, pick the crop, paste the Mycodo address
-and key, paste the unique id of each input and output, save `node.toml`, and run `grow-node run
-node.toml` on the Pi. The loop starts, the folder under `runs/` fills, and the dashboard shows the
-shelf.
+[docs/HARDWARE.md](docs/HARDWARE.md). The cheapest wiring is a Tasmota smart plug per switch
+(light, heater, fan, pump) and, if you want readings, one ESP32 running Tasmota with the sensors
+on I2C; or a Raspberry Pi running Mycodo. Open the dashboard's **Setup** tab: name the shelf, pick
+the crop, pick the hardware, give each switch its plug address (or each Mycodo input and output its
+unique id), pick the brain, save `node.toml`, and run `grow-node run node.toml` on the shelf's
+computer. The loop starts, the folder under `runs/` fills, the dashboard's **Find on LAN** lists
+the node, and two nodes show side by side for an A/B grow.
 
 The node's HTTP API is unauthenticated and bound to loopback by default. Reach it from another
 machine over an SSH tunnel; do not put it on the open network.
 
 ## Status
 
-Stage 0 (bootstrap) done: recipes, simulated office rig, Mycodo rig, safety guard, rule planner
-with room learning, run log, node binary, dashboard with setup wizard. 41 tests, Linux and
-Windows CI. No real plant has been grown with it yet; the first lettuce run is Stage 1. Stages and
-their pass conditions: [docs/ROADMAP.ko.md](docs/ROADMAP.ko.md).
+Everything that can be done without a plant is done: recipes with per-stage hard ceilings,
+simulated office rig, Tasmota and Mycodo rigs, safety guard, rule planner with room learning,
+engine planner with operator dialogue, run log with measured kWh, node binary with LAN discovery,
+dashboard with multi-node view and setup wizard, release workflow. 59 tests, Linux and Windows CI.
+No real plant has been grown with it yet; the first row of [docs/RESULTS.md](docs/RESULTS.md) is
+Stage 1. Stages and their pass conditions: [docs/ROADMAP.ko.md](docs/ROADMAP.ko.md). To add a
+crop: [docs/CONTRIBUTING-RECIPES.md](docs/CONTRIBUTING-RECIPES.md).
 
 ## License
 

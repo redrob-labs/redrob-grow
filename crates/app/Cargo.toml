@@ -16,6 +16,7 @@ grow-agent.workspace = true
 grow-hal.workspace = true
 grow-recipe.workspace = true
 grow-safety.workspace = true
+grow-run.workspace = true
 eframe.workspace = true
 egui.workspace = true
 serde.workspace = true

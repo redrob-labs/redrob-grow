@@ -13,6 +13,14 @@ grow-recipe.workspace = true
 grow-safety.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+ureq = { workspace = true, optional = true }
+
+[features]
+default = ["engine"]
+engine = ["dep:ureq"]
+
+[dev-dependencies]
+tiny_http.workspace = true
 
 [lints]
 workspace = true

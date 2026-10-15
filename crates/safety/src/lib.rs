@@ -99,13 +99,30 @@ pub struct Verdict {
 /// Stateful guard: remembers when each switch was last turned on, for cooldowns.
 #[derive(Debug, Clone)]
 pub struct Guard {
+    /// Limits in force now: the floor, tightened by the current recipe stage.
     pub limits: Limits,
+    floor: Limits,
     last_on_at: BTreeMap<Switch, u64>,
 }
 
 impl Guard {
     pub fn new(limits: Limits) -> Self {
-        Self { limits, last_on_at: BTreeMap::new() }
+        Self { floor: limits.clone(), limits, last_on_at: BTreeMap::new() }
+    }
+
+    /// Apply a stage's extra hard bands. Each band may only narrow the floor: a looser value is
+    /// ignored. Call once per cycle with the stage in force; a stage with no `hard` table
+    /// restores the floor.
+    pub fn tighten(&mut self, stage_hard: &BTreeMap<Quantity, Band>) {
+        let mut hard = self.floor.hard.clone();
+        for (q, b) in stage_hard {
+            let merged = match hard.get(q) {
+                Some(base) => Band::new(base.min.max(b.min), base.max.min(b.max)),
+                None => *b,
+            };
+            hard.insert(*q, merged);
+        }
+        self.limits.hard = hard;
     }
 
     /// Alarms for the current readings, independent of any proposal.
@@ -234,6 +251,22 @@ mod tests {
         );
         assert_eq!(v.run, vec![Command { switch: Switch::Light, on: false, for_secs: 0 }]);
         assert_eq!(v.rejected, vec![Rejection::UnknownSwitch(Switch::Pump)]);
+    }
+
+    #[test]
+    fn a_stage_can_tighten_but_never_loosen() {
+        let mut g = Guard::new(Limits::office_shelf());
+        let mut hard = BTreeMap::new();
+        hard.insert(Quantity::AirTempC, Band::new(0.0, 35.0)); // min looser, max tighter
+        hard.insert(Quantity::PpfdUmol, Band::new(0.0, 900.0)); // new quantity
+        g.tighten(&hard);
+        assert_eq!(g.limits.hard[&Quantity::AirTempC], Band::new(5.0, 35.0));
+        assert_eq!(g.limits.hard[&Quantity::PpfdUmol], Band::new(0.0, 900.0));
+        let s = snap(&[(Quantity::AirTempC, 36.0)], &[Switch::Heater]);
+        assert_eq!(g.alarms(&s).len(), 1);
+        g.tighten(&BTreeMap::new());
+        assert_eq!(g.limits.hard[&Quantity::AirTempC], Band::new(5.0, 38.0));
+        assert!(g.alarms(&s).is_empty());
     }
 
     #[test]

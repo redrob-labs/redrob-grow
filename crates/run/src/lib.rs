@@ -76,6 +76,14 @@ impl Run {
         Ok(())
     }
 
+    /// What the operator told the planner, one JSON line per message, in `operator.jsonl`.
+    pub fn append_operator(&self, day: u32, text: &str) -> Result<(), RunError> {
+        let mut f = fs::OpenOptions::new().create(true).append(true).open(self.dir.join("operator.jsonl"))?;
+        let line = serde_json::to_string(&serde_json::json!({ "day": day, "text": text }))?;
+        writeln!(f, "{line}")?;
+        Ok(())
+    }
+
     pub fn cycles(&self) -> Result<Vec<Report>, RunError> {
         let path = self.dir.join("cycles.jsonl");
         if !path.exists() {
@@ -121,8 +129,11 @@ pub struct Summary {
     pub in_band_ratio: f64,
     pub alarms: usize,
     pub rejected: usize,
-    /// Estimated from nominal watts and on-time; a metering plug replaces this later.
+    /// Estimated from nominal watts and on-time.
     pub kwh_estimate: f64,
+    /// Measured by the rig's meter (last minus first cumulative reading), when it has one.
+    #[serde(default)]
+    pub kwh_measured: Option<f64>,
     pub harvest: Option<Harvest>,
     /// kWh per gram of harvest, the number that decides whether indoor rice makes sense.
     pub kwh_per_g: Option<f64>,
@@ -150,7 +161,12 @@ impl Summary {
             }
             days = days.max(r.observation.clock.day + 1);
         }
-        let kwh = joules / 3_600_000.0;
+        let kwh_estimate = joules / 3_600_000.0;
+        let first = reports.iter().find_map(|r| r.observation.snapshot.energy_kwh);
+        let last = reports.iter().rev().find_map(|r| r.observation.snapshot.energy_kwh);
+        let kwh_measured = first.zip(last).map(|(a, b)| (b - a).max(0.0));
+        // The measured number wins when there is one: it is the point of the meter.
+        let kwh = kwh_measured.unwrap_or(kwh_estimate);
         let kwh_per_g = harvest.as_ref().filter(|h| h.fresh_weight_g > 0.0).map(|h| kwh / h.fresh_weight_g);
         Self {
             run_id: meta.id.clone(),
@@ -160,7 +176,8 @@ impl Summary {
             in_band_ratio: if reports.is_empty() { 0.0 } else { in_band as f64 / reports.len() as f64 },
             alarms,
             rejected,
-            kwh_estimate: kwh,
+            kwh_estimate,
+            kwh_measured,
             harvest,
             kwh_per_g,
         }
@@ -223,7 +240,10 @@ mod tests {
 
         again.write_harvest(&Harvest { harvested_on: "2026-10-27".into(), fresh_weight_g: 80.0, plant_count: 200, notes: String::new() }).unwrap();
         let s = again.summary(600).unwrap();
-        assert!((s.kwh_per_g.unwrap() - s.kwh_estimate / 80.0).abs() < 1e-12);
+        // The simulated rig meters, so the measured number is used and it tracks the estimate.
+        let measured = s.kwh_measured.unwrap();
+        assert!(measured > 0.0 && (measured - s.kwh_estimate).abs() / s.kwh_estimate < 0.5, "measured {measured} estimate {}", s.kwh_estimate);
+        assert!((s.kwh_per_g.unwrap() - measured / 80.0).abs() < 1e-12);
         let _ = fs::remove_dir_all(parent);
     }
 

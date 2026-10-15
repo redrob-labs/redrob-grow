@@ -108,7 +108,7 @@ impl Rig for MycodoRig {
         }
         let now = Instant::now();
         let on = self.cfg.outputs.keys().map(|s| (*s, self.on_until.get(s).is_some_and(|t| *t > now))).collect();
-        Ok(Snapshot { readings, on })
+        Ok(Snapshot { readings, on, energy_kwh: None })
     }
 
     fn set(&mut self, cmd: Command) -> Result<(), HalError> {

@@ -3,7 +3,8 @@
 //! Two rigs ship today. [`mock::OfficeRig`] is a small physics model of a shelf in an
 //! air-conditioned office, so the agent and the dashboard can be developed and tested with no
 //! hardware at all. [`mycodo::MycodoRig`] drives a Raspberry Pi running Mycodo over its REST API.
-//! A rig for Tasmota smart plugs over MQTT and a direct I2C rig are planned (see the roadmap).
+//! [`tasmota::TasmotaRig`] drives Tasmota smart plugs and sensor nodes over their HTTP command
+//! API, with no Pi in between. A direct I2C rig is planned (see the roadmap).
 
 use std::collections::BTreeMap;
 
@@ -14,6 +15,8 @@ pub use grow_recipe::Quantity;
 pub mod mock;
 #[cfg(feature = "mycodo")]
 pub mod mycodo;
+#[cfg(feature = "tasmota")]
+pub mod tasmota;
 
 /// What a switch is wired to. The agent reasons about these, never about plug numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -66,6 +69,10 @@ pub struct Reading {
 pub struct Snapshot {
     pub readings: BTreeMap<Quantity, f64>,
     pub on: BTreeMap<Switch, bool>,
+    /// Cumulative energy the rig has measured, kWh, when it has a meter. The run summary turns
+    /// the difference between first and last cycle into measured consumption.
+    #[serde(default)]
+    pub energy_kwh: Option<f64>,
 }
 
 impl Snapshot {

@@ -1,0 +1,174 @@
+# Release -- the redrob-labs shape (redrob-labs/.github workflow-templates/release.yml).
+#
+#   tag v<version> on main  ->  version  ->  windows / macos / linux (build, then sign)  ->  publish
+#
+# Two binaries per platform: `redrob-grow` (the dashboard) and `grow-node` (the program on the
+# shelf). Windows executables are Authenticode-signed through Azure Artifact Signing over OIDC
+# (build first, log in second, sign third). macOS ships as a portable zip; Developer ID signing and
+# notarization follow when the certificate is in the `release` environment. Linux ships a tar.gz
+# for x64 and for aarch64 (Raspberry Pi 4/5 running a 64-bit OS, the node's natural home).
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version for a dry run, e.g. 0.1.0-rc.1 (builds and signs, publishes nothing)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  PRODUCT: Redrob Grow
+  PRODUCT_URL: https://github.com/${{ github.repository }}
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    name: Resolve the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE:-}" = tag ]; then
+            v="${GITHUB_REF_NAME#v}"
+          elif [ -n "$INPUT_VERSION" ]; then
+            v="$INPUT_VERSION"
+          else
+            echo "::error::not a tag push and no version input"; exit 1
+          fi
+          declared=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "${GITHUB_REF_TYPE:-}" = tag ] && [ "$v" != "$declared" ]; then
+            echo "::error::tag v$v but Cargo.toml declares $declared"; exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: Windows x64
+    needs: version
+    runs-on: windows-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build (unsigned)
+        shell: pwsh
+        run: |
+          cargo build --release --locked -p grow-app -p grow-node
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/redrob-grow.exe dist/
+          Copy-Item target/release/grow-node.exe dist/
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign the executables
+        uses: redrob-labs/.github/actions/sign-windows@main
+        with:
+          files: dist/*.exe
+          description: ${{ env.PRODUCT }}
+          url: ${{ env.PRODUCT_URL }}
+          endpoint: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+          account: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT }}
+          cert-profile: ${{ secrets.ARTIFACT_SIGNING_CERT_PROFILE }}
+      - name: Package
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          New-Item -ItemType Directory -Force dist/release | Out-Null
+          Copy-Item README.md, LICENSE-MIT, LICENSE-APACHE dist/ -ErrorAction SilentlyContinue
+          Compress-Archive -Path dist/*.exe, dist/README.md -DestinationPath "dist/release/redrob-grow-$env:VERSION-windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-x64
+          path: dist/release/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS arm64
+    needs: version
+    runs-on: macos-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build and package (portable, unsigned)
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cargo build --release --locked -p grow-app -p grow-node
+          mkdir -p dist/release stage
+          cp target/release/redrob-grow target/release/grow-node README.md stage/
+          (cd stage && zip -q -r "../dist/release/redrob-grow-$VERSION-macos-arm64-portable.zip" .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-arm64
+          path: dist/release/*
+          if-no-files-found: error
+
+  linux:
+    name: Linux ${{ matrix.arch }}
+    needs: version
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Desktop headers for eframe
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+      - name: Build and package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          cargo build --release --locked -p grow-app -p grow-node
+          mkdir -p dist/release stage
+          cp target/release/redrob-grow target/release/grow-node README.md stage/
+          cp scripts/snap.sh stage/
+          tar -C stage -czf "dist/release/redrob-grow-$VERSION-linux-$ARCH.tar.gz" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-${{ matrix.arch }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  publish:
+    needs: [version, windows, macos, linux]
+    if: always() && github.ref_type == 'tag' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped')
+    uses: redrob-labs/.github/.github/workflows/release-publish.yml@main
+    permissions:
+      contents: write
+    with:
+      version: ${{ needs.version.outputs.version }}
+      title: Redrob Grow
+      launcher_manifest: true
+      publish: true

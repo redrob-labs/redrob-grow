@@ -7,18 +7,23 @@
 //!
 //! Two planners exist. [`RulePlanner`] is deterministic deadband control plus the office tricks
 //! (pre-heat before the air conditioner comes on, move the light into the hours when people are
-//! breathing CO2 into the room). The model-backed planner that reasons over the same
-//! [`Observation`] and emits the same [`Proposal`] arrives in Stage 2, through the tool schemas in
-//! [`tools`]; nothing in the loop changes when it does.
+//! breathing CO2 into the room). [`EnginePlanner`] hands the same [`Observation`], the rule
+//! planner's proposal and the operator's messages to a model through the tool schemas in
+//! [`tools`], and falls back to the rules when the model does not answer. The loop does not know
+//! which one it is running; the guard treats both alike.
 
 use grow_hal::{Command, HalError, Quantity, Rig, Snapshot, Switch};
 use grow_recipe::{Band, Recipe, Stage};
 use grow_safety::{Guard, Verdict};
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "engine")]
+pub mod engine;
 pub mod office;
 pub mod tools;
 
+#[cfg(feature = "engine")]
+pub use engine::{EngineConfig, EnginePlanner};
 pub use office::OfficeModel;
 
 /// Wall-clock facts the planner needs, supplied by the caller so the loop never reads a clock.
@@ -53,6 +58,16 @@ pub struct Observation {
 pub struct Proposal {
     pub commands: Vec<Command>,
     pub reasons: Vec<String>,
+    /// Which planner produced this. Empty means the rule planner.
+    #[serde(default)]
+    pub planner: String,
+    /// Things the planner wants the human to read. No action attached.
+    #[serde(default)]
+    pub notes: Vec<String>,
+    /// Questions the planner wants answered before it changes course. The node keeps them until
+    /// the operator replies.
+    #[serde(default)]
+    pub questions: Vec<String>,
 }
 
 impl Proposal {
@@ -65,6 +80,28 @@ impl Proposal {
 pub trait Planner {
     fn name(&self) -> &str;
     fn plan(&mut self, obs: &Observation) -> Proposal;
+    /// A message from the operator (an answer to `ask_human`, an instruction). Planners that
+    /// cannot read ignore it.
+    fn hear(&mut self, _message: &str) {}
+    /// One line of health for the dashboard: last error, cycles answered.
+    fn status(&self) -> String {
+        String::new()
+    }
+}
+
+impl Planner for Box<dyn Planner> {
+    fn name(&self) -> &str {
+        (**self).name()
+    }
+    fn plan(&mut self, obs: &Observation) -> Proposal {
+        (**self).plan(obs)
+    }
+    fn hear(&mut self, message: &str) {
+        (**self).hear(message)
+    }
+    fn status(&self) -> String {
+        (**self).status()
+    }
 }
 
 /// Everything one cycle did.
@@ -108,6 +145,7 @@ impl<R: Rig, P: Planner> Cycle<R, P> {
 
     pub fn run(&mut self, clock: Clock) -> Result<Report, HalError> {
         let observation = self.observe(clock)?;
+        self.guard.tighten(&observation.stage.hard);
         let proposal = self.planner.plan(&observation);
         let verdict = self.guard.check(clock.now_secs, &observation.snapshot, &proposal.commands);
         let mut failed = Vec::new();
@@ -143,7 +181,7 @@ impl Planner for RulePlanner {
     }
 
     fn plan(&mut self, obs: &Observation) -> Proposal {
-        let mut p = Proposal::default();
+        let mut p = Proposal { planner: "rules".into(), ..Default::default() };
         let s = &obs.snapshot;
         let has = |sw: Switch| obs.switches.contains(&sw);
         let stage = &obs.stage;
@@ -312,6 +350,17 @@ mod tests {
         assert!(RulePlanner::light_should_be_on(&stage, 3.0, None));
         assert!(!RulePlanner::light_should_be_on(&stage, 7.0, None));
         assert!(RulePlanner::light_should_be_on(&stage, 9.5, Some(9.0)));
+    }
+
+    #[test]
+    fn rice_at_flowering_puts_a_35_c_ceiling_in_the_guard() {
+        let rig = OfficeRig::new(Office::summer());
+        let mut cycle = Cycle::new(rig, RulePlanner::default(), Guard::new(Limits::office_shelf()), builtin::by_id("rice-sindongjin").unwrap());
+        cycle.run(Clock { now_secs: 0, hour: 12.0, weekday: true, day: 30 }).unwrap();
+        assert_eq!(cycle.guard.limits.hard[&Quantity::AirTempC].max, 38.0, "tillering keeps the floor");
+        cycle.run(Clock { now_secs: 600, hour: 12.0, weekday: true, day: 70 }).unwrap();
+        assert_eq!(cycle.guard.limits.hard[&Quantity::AirTempC].max, 35.0, "heading tightens");
+        assert_eq!(cycle.guard.limits.hard[&Quantity::WaterTempC].max, 33.0);
     }
 
     #[test]

@@ -108,6 +108,11 @@ pub struct Stage {
     /// Free text for the human and for the agent's prompt. Never parsed.
     #[serde(default)]
     pub notes: String,
+    /// Emergency bands this stage tightens on top of the guard's built-in hard limits (rice at
+    /// flowering: air above 35 C sterilises pollen). A stage can only tighten; the guard ignores
+    /// a value looser than its floor.
+    #[serde(default)]
+    pub hard: BTreeMap<Quantity, Band>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -168,7 +173,7 @@ impl Recipe {
             if s.from_day >= self.days {
                 return Err(RecipeError::StagePastEnd(s.name.clone(), s.from_day, self.days));
             }
-            for (q, b) in &s.targets {
+            for (q, b) in s.targets.iter().chain(&s.hard) {
                 if b.min > b.max {
                     return Err(RecipeError::BandInverted(s.name.clone(), *q, b.min, b.max));
                 }
