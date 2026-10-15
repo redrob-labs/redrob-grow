@@ -39,7 +39,7 @@
 - 릴리즈 워크플로(org 템플릿, Windows OIDC 서명, Linux x64+aarch64 라즈베리파이), 레시피 기여 가이드.
 
 확인된 것: `grow-node`가 실제 Redrob Code 데몬에 붙어 요청을 보낸다(2026-10-15 실측). 데몬 v0.6.4의
-`/v1/chat/completions`가 `LLMClient` 서비스 누락으로 500을 내는 버그를 찾아 redrob-code PR #106으로 고쳤고,
+`/v1/chat/completions`가 `LLMClient` 서비스 누락으로 500을 내는 버그를 찾아 redrob-code PR #107으로 고쳤고,
 고친 데몬에서는 요청이 공급자까지 간다(이 호스트는 Console 자격증명이 없어 401에서 멈춤). 모델이 실제로
 스위치를 고르는 첫 기록은 1단계 선반에서 나온다.
 
