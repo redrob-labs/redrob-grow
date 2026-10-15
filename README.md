@@ -32,6 +32,24 @@ One Rust workspace, built from scratch:
 No JavaScript, no web view, no cloud. The node runs on the shelf's own computer and the
 dashboard talks to it on your LAN.
 
+## What it looks like
+
+![Two shelves side by side, A on rules and B on the agent, with the agent's notes and questions in the dock on the right](docs/images/shelf-agent.png)
+
+Left to right: the tool strip, the canvas with one card per shelf (readings against the stage
+bands, switches, what was decided and why, what the guard did, 48 hours of air and water
+temperature), and the dock with the **Agent** chat and the **Nodes** panel. The agent writes
+notes and asks questions there; your reply goes into its next cycle.
+
+<details>
+<summary>Setup wizard and recipes</summary>
+
+![The five-step setup wizard](docs/images/setup.png)
+
+![Built-in recipes, stage by stage, with the hard ceilings the guard enforces](docs/images/recipes.png)
+
+</details>
+
 ## Try it with no hardware
 
 ```sh
