@@ -10,6 +10,7 @@
 
 mod remote;
 mod sim;
+mod theme;
 mod ui;
 mod wizard;
 

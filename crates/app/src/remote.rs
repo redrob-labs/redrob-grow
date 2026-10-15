@@ -28,7 +28,15 @@ pub struct NodeState {
     #[serde(default)]
     pub questions: Vec<Question>,
     #[serde(default)]
+    pub operator: Vec<OperatorMessage>,
+    #[serde(default)]
     pub history: Vec<Report>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct OperatorMessage {
+    pub cycle: usize,
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -40,6 +48,7 @@ pub struct Note {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Question {
+    pub cycle: usize,
     pub day: u32,
     pub text: String,
     pub answer: Option<String>,

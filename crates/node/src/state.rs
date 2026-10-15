@@ -29,6 +29,14 @@ pub struct Note {
     pub text: String,
 }
 
+/// What the operator typed, kept for the dashboard's transcript.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OperatorMessage {
+    /// The cycle it will be read in (the next one at the time of typing).
+    pub cycle: usize,
+    pub text: String,
+}
+
 /// A question the planner asked. Open until the operator answers anything.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Question {
@@ -53,6 +61,8 @@ pub struct State {
     pub notes: VecDeque<Note>,
     /// Newest last; open ones have `answer: None`.
     pub questions: Vec<Question>,
+    /// Newest last.
+    pub operator: Vec<OperatorMessage>,
     /// Operator messages not yet handed to the planner.
     #[serde(skip)]
     pub inbox: Vec<String>,
@@ -74,6 +84,7 @@ impl State {
             last_error: None,
             notes: VecDeque::with_capacity(NOTES),
             questions: Vec::new(),
+            operator: Vec::new(),
             inbox: Vec::new(),
             history: VecDeque::with_capacity(HISTORY),
         }
@@ -122,6 +133,10 @@ impl State {
             closed += 1;
         }
         self.inbox.push(text.to_owned());
+        if self.operator.len() == NOTES {
+            self.operator.remove(0);
+        }
+        self.operator.push(OperatorMessage { cycle: self.cycles + 1, text: text.to_owned() });
         closed
     }
 
@@ -228,6 +243,8 @@ mod tests {
         assert_eq!(s.open_questions(), 0);
         assert_eq!(s.inbox, vec!["yes, I watered it"]);
         assert_eq!(s.questions[0].answer.as_deref(), Some("yes, I watered it"));
+        assert_eq!(s.operator[0].text, "yes, I watered it");
+        assert_eq!(s.operator[0].cycle, 4);
     }
 
     /// Minimal HTTP/1.0 with std only, so the node has no HTTP client dependency.
